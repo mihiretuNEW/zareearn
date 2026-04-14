@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a bot user and their earning stats.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Telegram User ID" },
+        "username": { "type": "string", "description": "Telegram Username" },
+        "balance": { "type": "number", "description": "Current balance in points" },
+        "referralsCount": { "type": "number", "description": "Number of successful referrals" },
+        "referredBy": { "type": "string", "description": "UID of the user who referred this user" },
+        "joinedChannel": { "type": "boolean", "description": "Whether the user has joined the required channel" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "balance", "joinedChannel"]
+    },
+    "Withdrawal": {
+      "title": "Withdrawal",
+      "description": "Represents a withdrawal request.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "amount": { "type": "number" },
+        "telebirrNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "amount", "telebirrNumber", "status"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global bot settings.",
+      "type": "object",
+      "properties": {
+        "startEarningLink": { "type": "string" },
+        "supportLink": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles and balances"
+    },
+    "/withdrawals/{id}": {
+      "schema": "Withdrawal",
+      "description": "Withdrawal requests"
+    },
+    "/settings/global": {
+      "schema": "Settings",
+      "description": "Global configuration"
+    }
+  }
+}
