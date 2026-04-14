@@ -263,6 +263,20 @@ bot.on("text", async (ctx) => {
       ctx.reply(`✅ Support link updated to: ${link}`);
       return;
     }
+    if (text === "/setup") {
+      if (APP_URL && APP_URL.startsWith("https")) {
+        const webhookUrl = `${APP_URL}/api/webhook`;
+        try {
+          await bot.telegram.setWebhook(webhookUrl);
+          ctx.reply(`✅ Webhook successfully set to:\n${webhookUrl}`);
+        } catch (e) {
+          ctx.reply(`❌ Failed to set webhook: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      } else {
+        ctx.reply("❌ APP_URL is not set or is not an HTTPS URL. Webhook cannot be set automatically.");
+      }
+      return;
+    }
   }
 });
 
@@ -311,8 +325,9 @@ bot.action(/^reject_(.+)$/, async (ctx) => {
 });
 
 // --- Express Server Setup ---
+const app = express();
+
 async function startServer() {
-  const app = express();
   const PORT = 3000;
 
   app.use(express.json());
@@ -325,8 +340,34 @@ async function startServer() {
   });
 
   // Health check
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+  app.get("/api/health", async (req, res) => {
+    try {
+      const webhookInfo = await bot.telegram.getWebhookInfo();
+      res.json({ 
+        status: "ok", 
+        webhook: webhookInfo,
+        appUrl: APP_URL,
+        nodeEnv: process.env.NODE_ENV,
+        vercel: process.env.VERCEL
+      });
+    } catch (e) {
+      res.json({ status: "ok", error: "Could not fetch webhook info" });
+    }
+  });
+
+  // Manual setup route for browser
+  app.get("/api/setup", async (req, res) => {
+    if (APP_URL && APP_URL.startsWith("https")) {
+      const webhookUrl = `${APP_URL}/api/webhook`;
+      try {
+        await bot.telegram.setWebhook(webhookUrl);
+        res.send(`✅ Webhook successfully set to: ${webhookUrl}`);
+      } catch (e) {
+        res.status(500).send(`❌ Failed to set webhook: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    } else {
+      res.status(400).send("❌ APP_URL is not set or is not an HTTPS URL. Set it in your environment variables.");
+    }
   });
 
   // Vite middleware for development
@@ -344,24 +385,29 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", async () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`🔗 APP_URL: ${APP_URL}`);
-    
-    // Set Telegram Webhook
-    if (APP_URL && APP_URL.startsWith("https")) {
-      try {
-        const webhookUrl = `${APP_URL}/api/webhook`;
-        await bot.telegram.setWebhook(webhookUrl);
-        console.log(`✅ Webhook set to: ${webhookUrl}`);
-      } catch (e) {
-        console.error("❌ Failed to set webhook:", e);
-      }
-    } else {
-      console.log("⚠️ APP_URL is not set or not HTTPS. Starting bot in polling mode...");
-      bot.launch().then(() => console.log("🤖 Bot started in polling mode"));
+  // Set Telegram Webhook
+  if (APP_URL && APP_URL.startsWith("https")) {
+    try {
+      const webhookUrl = `${APP_URL}/api/webhook`;
+      await bot.telegram.setWebhook(webhookUrl);
+      console.log(`✅ Webhook set to: ${webhookUrl}`);
+    } catch (e) {
+      console.error("❌ Failed to set webhook:", e);
     }
-  });
+  } else if (process.env.NODE_ENV !== "production") {
+    console.log("⚠️ APP_URL is not set or not HTTPS. Starting bot in polling mode...");
+    bot.launch().then(() => console.log("🤖 Bot started in polling mode"));
+  }
+
+  // Only listen if not running as a Vercel function
+  if (process.env.VERCEL !== "1") {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`🚀 Server running on http://localhost:${PORT}`);
+      console.log(`🔗 APP_URL: ${APP_URL}`);
+    });
+  }
 }
 
 startServer();
+
+export default app;
